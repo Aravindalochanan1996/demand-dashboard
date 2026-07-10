@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from "../api";
 
-export default function DeletedRowsModal({ clientId, onClose }) {
+export default function DeletedRowsModal({ clientId, columns, onClose }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -28,28 +28,26 @@ export default function DeletedRowsModal({ clientId, onClose }) {
         {error && <div className="error-text">{error}</div>}
         {!loading && rows.length === 0 && <p className="empty-note">No deleted rows for this client</p>}
         {rows.length > 0 && (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Role</th>
-                <th>Required Positions</th>
-                <th>Profiles Submitted</th>
-                <th>Selected</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.date}</td>
-                  <td>{r.role}</td>
-                  <td>{r.required_positions}</td>
-                  <td>{r.profiles_submitted}</td>
-                  <td>{r.selected}</td>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {columns.map((c) => (
+                    <th key={c}>{c}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id}>
+                    {columns.map((c) => (
+                      <td key={c}>{String(r.data?.[c] ?? "")}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         <div className="modal-actions">
           <button className="btn secondary" onClick={onClose}>

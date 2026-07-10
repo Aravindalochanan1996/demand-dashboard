@@ -1,20 +1,11 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
-# Columns A, B, C - never editable by anyone through the row-edit endpoint
-NON_EDITABLE_FIELDS = ["date", "role", "required_positions"]
-
-# Columns D onward - editable by business_user and admin via edit mode
-EDITABLE_FIELDS = [
-    "profiles_submitted",
-    "drop_out_profile",
-    "pending_interview",
-    "interview_round1",
-    "interview_round2",
-    "selected",
-]
-
-ALL_ROW_FIELDS = NON_EDITABLE_FIELDS + EDITABLE_FIELDS
+# Number of leading columns (by position, whatever their header text is) that
+# are never editable through the row-edit endpoint. Matches "first 3 columns
+# should not be editable" from the original spec, now applied positionally
+# since column headers are dynamic (driven by the uploaded Excel sheet).
+NON_EDITABLE_COLUMN_COUNT = 3
 
 
 class LoginRequest(BaseModel):
@@ -45,29 +36,72 @@ class UserOut(BaseModel):
 class ClientOut(BaseModel):
     id: str
     name: str
+    columns: List[str] = Field(default_factory=list)
 
 
 class RowOut(BaseModel):
     id: str
     client_id: str
-    date: Optional[str] = None
-    role: Optional[str] = None
-    required_positions: Optional[float] = None
-    profiles_submitted: Optional[float] = None
-    drop_out_profile: Optional[float] = None
-    pending_interview: Optional[float] = None
-    interview_round1: Optional[float] = None
-    interview_round2: Optional[float] = None
-    selected: Optional[float] = None
+    data: Dict[str, Any] = Field(default_factory=dict)
     last_edited_by: Optional[str] = None
     last_edited_at: Optional[str] = None
 
 
 class RowUpdateRequest(BaseModel):
-    # Only editable fields accepted here - non-editable fields are rejected
-    profiles_submitted: Optional[float] = None
-    drop_out_profile: Optional[float] = None
-    pending_interview: Optional[float] = None
-    interview_round1: Optional[float] = None
-    interview_round2: Optional[float] = None
-    selected: Optional[float] = None
+    # Keyed by column header. Server strips any key that falls in the first
+    # NON_EDITABLE_COLUMN_COUNT columns of the client's column list.
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class BulkDeleteRequest(BaseModel):
+    row_ids: List[str]
+
+
+# ---- ATS Tracker (basic structure) ----
+
+class AtsEntryIn(BaseModel):
+    company: str
+    role: str
+    status: str = "Applied"  # Applied | Interview | Offer | Rejected
+    applied_date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class AtsEntryOut(AtsEntryIn):
+    id: str
+    owner_username: str
+
+
+# ---- Resume Builder (basic structure) ----
+
+class ResumeDraftIn(BaseModel):
+    full_name: Optional[str] = None
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    experience: List[Dict[str, Any]] = Field(default_factory=list)
+    education: List[Dict[str, Any]] = Field(default_factory=list)
+    skills: List[str] = Field(default_factory=list)
+
+
+class ResumeDraftOut(ResumeDraftIn):
+    id: str
+    owner_username: str
+
+
+class AiSuggestRequest(BaseModel):
+    section: str  # e.g. "summary"
+    context: str  # free text the model uses to draft a suggestion
+
+
+# ---- Resume Analyzer chatbot ----
+
+class ResumeFileOut(BaseModel):
+    id: str
+    filename: str
+    candidate_name: str
+    uploaded_at: str
+
+
+class ResumeAskRequest(BaseModel):
+    question: str
+    file_ids: List[str] = Field(default_factory=list)  # empty = use all of the user's files

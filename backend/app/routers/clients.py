@@ -6,28 +6,20 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..database import clients_collection, rows_collection
 from ..auth import get_current_user
-from ..schemas import ClientOut, RowOut, RowUpdateRequest, EDITABLE_FIELDS
+from ..schemas import ClientOut, RowOut, RowUpdateRequest, NON_EDITABLE_COLUMN_COUNT
 
 router = APIRouter(prefix="/api/clients", tags=["clients"])
 
 
 def serialize_client(doc) -> ClientOut:
-    return ClientOut(id=str(doc["_id"]), name=doc["name"])
+    return ClientOut(id=str(doc["_id"]), name=doc["name"], columns=doc.get("columns", []))
 
 
 def serialize_row(doc) -> RowOut:
     return RowOut(
         id=str(doc["_id"]),
         client_id=str(doc["client_id"]),
-        date=doc.get("date"),
-        role=doc.get("role"),
-        required_positions=doc.get("required_positions"),
-        profiles_submitted=doc.get("profiles_submitted"),
-        drop_out_profile=doc.get("drop_out_profile"),
-        pending_interview=doc.get("pending_interview"),
-        interview_round1=doc.get("interview_round1"),
-        interview_round2=doc.get("interview_round2"),
-        selected=doc.get("selected"),
+        data=doc.get("data", {}),
         last_edited_by=doc.get("last_edited_by"),
         last_edited_at=doc.get("last_edited_at"),
     )
@@ -42,7 +34,7 @@ def _oid(id_str: str) -> ObjectId:
 
 @router.get("", response_model=list[ClientOut])
 async def list_clients(user: dict = Depends(get_current_user)):
-    """Sidepane list. Admin sees every client; business_user sees only assigned ones."""
+    """Client tab list. Admin sees every client; business_user sees only assigned ones."""
     if user["role"] == "admin":
         cursor = clients_collection.find({})
     else:
@@ -73,8 +65,8 @@ async def update_row(
     payload: RowUpdateRequest,
     user: dict = Depends(get_current_user),
 ):
-    """Business users and admins can edit columns D onward only (enforced by RowUpdateRequest
-    schema, which simply has no fields for date/role/required_positions)."""
+    """Business users and admins can edit any column after the first
+    NON_EDITABLE_COLUMN_COUNT columns of this client's column list."""
     client_doc = await clients_collection.find_one({"_id": _oid(client_id)})
     if not client_doc:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -86,13 +78,16 @@ async def update_row(
     if not row_doc:
         raise HTTPException(status_code=404, detail="Row not found")
 
-    update_data = {k: v for k, v in payload.dict(exclude_unset=True).items() if k in EDITABLE_FIELDS}
+    columns = client_doc.get("columns", [])
+    editable_columns = set(columns[NON_EDITABLE_COLUMN_COUNT:])
+    update_data = {k: v for k, v in payload.data.items() if k in editable_columns}
     if not update_data:
         raise HTTPException(status_code=400, detail="No editable fields provided")
 
-    update_data["last_edited_by"] = user["username"]
-    update_data["last_edited_at"] = datetime.utcnow().isoformat()
+    set_doc = {f"data.{k}": v for k, v in update_data.items()}
+    set_doc["last_edited_by"] = user["username"]
+    set_doc["last_edited_at"] = datetime.utcnow().isoformat()
 
-    await rows_collection.update_one({"_id": row_doc["_id"]}, {"$set": update_data})
+    await rows_collection.update_one({"_id": row_doc["_id"]}, {"$set": set_doc})
     updated = await rows_collection.find_one({"_id": row_doc["_id"]})
     return serialize_row(updated)

@@ -11,6 +11,11 @@ class Settings(BaseSettings):
 
     frontend_origin: str = "http://localhost:3000"
 
+    # Used by the Resume Analyzer chatbot (and available for future AI features
+    # in ATS Tracker / Resume Builder). Never exposed to the frontend.
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-5"
+
     class Config:
         env_file = ".env"
 

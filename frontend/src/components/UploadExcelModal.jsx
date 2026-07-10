@@ -18,7 +18,7 @@ export default function UploadExcelModal({ onClose, onUploaded }) {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setSummary(res.data.summary);
-      onUploaded();
+      if (onUploaded) await onUploaded();
     } catch (err) {
       setError(err.response?.data?.detail || "Upload failed");
     } finally {
@@ -31,9 +31,9 @@ export default function UploadExcelModal({ onClose, onUploaded }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Upload Excel</h2>
         <p className="subtitle">
-          Each sheet becomes a client in the sidepane. Sheet headers should match: Date, Role,
-          Required Positions, Profiles Submitted, Drop out profile, Pending Interview, Interview
-          Round 1, Interview Round 2, Selected.
+          Each sheet becomes a client in the client tabs. Whatever headers are in row 1 of a
+          sheet become that client's table columns automatically - the first 3 columns stay
+          locked, everything after that is editable. A trailing "Total" row is skipped.
         </p>
         <input
           type="file"
